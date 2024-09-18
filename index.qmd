@@ -10,7 +10,7 @@ execute:
 editor: visual
 ---
 
-```{r}
+```{r warning=FALSE}
 #| inclue: false
 #| message: false
 library(readr)
@@ -51,7 +51,10 @@ Take a look at the distribution of the expression levels:
 
 ```{r}
 #| message: false
-(g1 <- )
+
+(g1 <- ggplot(data = dat, aes(x = expression)) +
+  geom_histogram())
+
 ## You'll probably notice an automatic message that appears when drawing the histogram: `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
 ## Change the arguments bins or binwidth of geom_histogram() to change the number or width of the bins.
 ```
@@ -60,15 +63,20 @@ The data should be transformed. Transforming on the $\log_{10}$ scale is easy in
 
 ```{r}
 #| warning: false
-g1 + 
+g1 + scale_x_log10()
 ```
 
 but we often use a $log_2$ scale when looking at expression data:
 
 ```{r}
 #| warning: false
+
 ticks_at <- c(0,5,10,15)
 ggplot(dat, aes(l2exp)) +
+  geom_histogram() + 
+  scale_x_continuous(breaks=ticks_at, labels = 2^ticks_at) + 
+  labs(x = "Expression", 
+       y = "Count")
 
 ```
 
@@ -79,40 +87,52 @@ We will now draw a scatter plot with two continuous variables and the `geom_poin
 ```{r}
 #| message: false
 # fold change data
-dat_fc <- dat %>% 
-    select(gene, 
+
+dat_fc <- dat %>%
+    select(gene,
            time,
            gene_biotype,
            expression) %>%
-    
+
      # calculate summaries of log2 expression grouped by gene, time, gene_biotype
     group_by(gene, time, gene_biotype) %>%
     summarize(mean_exp = mean(log2(expression + 1))) %>%
     ungroup() %>%
-    
+
     # pivot wider so that there is a separate column for each value in time
     pivot_wider(names_from = time,
                 values_from = mean_exp) %>%
-    
+
     mutate(time_8_vs_0 = `8` - `0`, # compare time 8 vs 0
            time_4_vs_0 = `4` - `0`) # compare time 4 vs 0
 
 # visualize time_4_vs_0 by time_8_vs_0 
-ggplot(dat_fc, ...) +
+ggplot(data = dat_fc, aes(x = time_4_vs_0, y = time_8_vs_0)) +
+  geom_point(alpha = 0.2) + 
+  geom_smooth(method = "lm", se= FALSE, color = 'black', linewidth = 0.8)
 
 ```
 
 We could also add color, but it begins to get a little messy with the large number of categories we have.
 
 ```{r}
-ggplot(dat_fc, aes(time_4_vs_0, time_8_vs_0)) +
+#| message: false
+#| warning: false
+ggplot(data = dat_fc, aes(x = time_4_vs_0, y = time_8_vs_0)) +
+  geom_point(aes(color = gene_biotype), alpha = 0.2) + 
+  geom_smooth(method = "lm", se= FALSE, color = 'black', linewidth = 0.8) +
+  scale_color_brewer(palette = 'Set3')
 
 ```
 
 Over-plotting can be an issue with large datasets like this. One solution is using `hexbin:geom_hex()`.
 
 ```{r}
+#| message: false
+#| warning: false
 ggplot(dat_fc, aes(time_4_vs_0, time_8_vs_0)) +
+  geom_hex() +
+  geom_smooth(method = "lm", se= FALSE, color = 'black', linewidth = 0.8)
 
 ```
 
@@ -121,7 +141,11 @@ ggplot(dat_fc, aes(time_4_vs_0, time_8_vs_0)) +
 We can use boxplots to visualize the distribution of gene expressions within each sample:
 
 ```{r}
-ggplot(dat, ) +
+ggplot(dat, aes(x = sample, y = l2exp)) +
+  geom_boxplot() + 
+  labs(x = "Sample", 
+       y = "Log2 Expression") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))
 
 ```
 
@@ -129,7 +153,11 @@ Adding points to box plots can give us a better understanding of the underlying 
 
 ```{r}
 ggplot(dat, aes(sample, l2exp)) +
-    geom_jitter(alpha = 0.02, width = .15, color = cbbPalette[2]) +
+  geom_boxplot() + 
+  geom_jitter(alpha = 0.02, width = .15) +
+  labs(x = "Sample", 
+       y = "Log2 Expression") +
+  theme(axis.text.x = element_text(angle = 90))
 
 ```
 
@@ -137,8 +165,13 @@ We could also use `geom_violin` to better see the distribution of points. Try co
 
 ```{r}
 ggplot(dat, aes(sample, l2exp)) +
-    geom_jitter(alpha = 0.02, width = .15, aes(color = as.factor(time))) +
-
+  geom_violin() +
+  geom_jitter(alpha = 0.02, width = .15, aes(color = as.factor(time))) +
+  labs(x = "Sample", 
+       y = "Log2 Expression",
+       color = "Time") +
+  theme(axis.text.x = element_text(angle = 90)) + 
+  scale_color_brewer(palette = 'Dark2')
 ```
 
 ### Line plots
@@ -147,6 +180,7 @@ Let's calculate the mean expression per duration of the infection for the 10 gen
 
 ```{r}
 #| message: false
+#| warning: false
 
 # First, we need to select the genes
 genes_selected <- arrange(dat_fc, desc(time_8_vs_0))$gene[1:10]
@@ -161,9 +195,17 @@ mean_exp_by_time <- dat %>%
     summarize(mean_exp = mean(l2exp)) %>%
     ungroup()
 
-ggplot(mean_exp_by_time, ) +
+ggplot(mean_exp_by_time, aes(x = time, y = mean_exp, color = gene)) +
+  geom_line() + 
+  labs(x = "Time",
+       y = "Mean log2 Expression") + 
+  scale_color_brewer(palette = 'Dark2')
 
-ggplot(mean_exp_by_time, ) +
+ggplot(mean_exp_by_time, aes(x = time, y = mean_exp)) +
+  geom_line() + 
+  labs(x = "Time",
+       y = "Mean log2 Expression")+
+  facet_wrap(~gene)
 
 ```
 
@@ -181,7 +223,11 @@ mean_exp_by_time_sex <- dat %>%
     summarize(mean_exp = mean(l2exp)) %>%
     ungroup()
 
-ggplot(mean_exp_by_time_sex, ) +
+ggplot(mean_exp_by_time_sex, aes(x = time, y = mean_exp, color = sex)) +
+  geom_line() + 
+  labs(x = "Time",
+       y = "Mean log2 Expression")+
+  facet_wrap(~gene)
 
 ```
 
@@ -193,7 +239,11 @@ mean_exp_by_chromosome <- dat %>%
     group_by(chromosome_name, time) %>%
     summarize(mean_exp = mean(l2exp))
 
-ggplot(mean_exp_by_chromosome, ) +
+ggplot(mean_exp_by_chromosome, aes(x = time, y = mean_exp) ) +
+  geom_line() + 
+  labs(x = "Time",
+       y = "Mean log2 Expression")+
+  facet_wrap(~chromosome_name)
 
 ```
 
@@ -203,6 +253,10 @@ Let's modify the previous plot to compare how the mean gene expression of males 
 
 ```{r}
 # One column, facet by rows
-ggplot(mean_exp_by_time_sex, ) +
+ggplot(mean_exp_by_time_sex, aes(x = time, y = mean_exp, color = gene)) +
+  geom_line() + 
+  labs(x = "Time",
+       y = "Mean log2 Expression")+
+  facet_grid(sex~.)
 
 ```
